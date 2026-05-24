@@ -25,6 +25,12 @@ enum class GameMode {
 data class AppSettings(
     val boardTheme: BoardTheme = BoardTheme.CLASSIC,
     val pieceStyle: PieceStyle = PieceStyle.CLASSIC,
+    val holographicThemeEnabled: Boolean = true,
+    val scanlineEffectEnabled: Boolean = true,
+    val pieceGlowEnabled: Boolean = true,
+    val aiAnalysisOverlayEnabled: Boolean = true,
     val soundEnabled: Boolean = true,
+    val hapticFeedbackEnabled: Boolean = true,
+    val twoFactorAuthEnabled: Boolean = false,
     val aiDifficulty: AiDifficulty = AiDifficulty.MEDIUM,
 )

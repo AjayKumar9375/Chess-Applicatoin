@@ -3,9 +3,8 @@ package com.pramod.chessmasteroffline.ui
 enum class AppScreen {
     SPLASH,
     HOME,
-    NEW_GAME,
+    LOCAL_SETUP,
     BOARD,
+    PROFILE,
     SETTINGS,
-    ABOUT,
-    PREMIUM,
 }

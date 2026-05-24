@@ -5,7 +5,7 @@
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:statusBarColor">#102326</item>
-        <item name="android:navigationBarColor">#102326</item>
+        <item name="android:statusBarColor">#040810</item>
+        <item name="android:navigationBarColor">#040810</item>
     </style>
 </resources>

@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -18,12 +19,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.material3.Scaffold
-import com.pramod.chessmasteroffline.ui.screens.AboutScreen
+import com.pramod.chessmasteroffline.data.AiDifficulty
+import com.pramod.chessmasteroffline.data.GameMode
 import com.pramod.chessmasteroffline.ui.screens.BoardScreen
 import com.pramod.chessmasteroffline.ui.screens.HomeScreen
-import com.pramod.chessmasteroffline.ui.screens.NewGameScreen
-import com.pramod.chessmasteroffline.ui.screens.PremiumScreen
+import com.pramod.chessmasteroffline.ui.screens.LocalSetupScreen
+import com.pramod.chessmasteroffline.ui.screens.PlayerProfileScreen
 import com.pramod.chessmasteroffline.ui.screens.SettingsScreen
 import com.pramod.chessmasteroffline.ui.screens.SplashScreen
 
@@ -45,10 +46,9 @@ fun ChessMasterApp(viewModel: ChessViewModel) {
             AppScreen.SPLASH -> Unit
             AppScreen.HOME -> showExitDialog = true
             AppScreen.BOARD,
-            AppScreen.NEW_GAME,
+            AppScreen.LOCAL_SETUP,
+            AppScreen.PROFILE,
             AppScreen.SETTINGS,
-            AppScreen.ABOUT,
-            AppScreen.PREMIUM,
             -> viewModel.navigate(AppScreen.HOME)
         }
     }
@@ -65,50 +65,58 @@ fun ChessMasterApp(viewModel: ChessViewModel) {
                 AppScreen.HOME -> HomeScreen(
                     uiState = uiState,
                     contentPadding = padding,
-                    onNewGame = { viewModel.navigate(AppScreen.NEW_GAME) },
-                    onResume = viewModel::resumeLastGame,
-                    onSettings = { viewModel.navigate(AppScreen.SETTINGS) },
-                    onAbout = { viewModel.navigate(AppScreen.ABOUT) },
-                    onPremium = { viewModel.navigate(AppScreen.PREMIUM) },
+                    activeScreen = AppScreen.HOME,
+                    onQuickMatch = { viewModel.startNewGame(GameMode.VS_AI, AiDifficulty.MEDIUM) },
+                    onChallengePlayer = { viewModel.navigate(AppScreen.LOCAL_SETUP) },
+                    onTrainingMode = { viewModel.startNewGame(GameMode.VS_AI, AiDifficulty.HARD) },
+                    onSignIn = { viewModel.signInWithGoogle(activity ?: it) },
+                    onSignOut = { viewModel.signOut(activity ?: it) },
+                    onNavigate = viewModel::navigate,
                 )
-                AppScreen.NEW_GAME -> NewGameScreen(
+                AppScreen.LOCAL_SETUP -> LocalSetupScreen(
                     uiState = uiState,
                     contentPadding = padding,
+                    onWhiteNameChange = viewModel::updateLocalWhiteName,
+                    onBlackNameChange = viewModel::updateLocalBlackName,
+                    onWhiteIconSelected = viewModel::updateLocalWhiteIcon,
+                    onBlackIconSelected = viewModel::updateLocalBlackIcon,
+                    onTimeControlSelected = viewModel::updateLocalTimeControl,
+                    onLaunch = viewModel::launchLocalVoidMatch,
                     onBack = { viewModel.navigate(AppScreen.HOME) },
-                    onModeSelected = viewModel::setNewGameMode,
-                    onDifficultySelected = viewModel::setNewGameDifficulty,
-                    onStart = { viewModel.startNewGame() },
                 )
                 AppScreen.BOARD -> BoardScreen(
                     uiState = uiState,
                     contentPadding = padding,
-                    onBackHome = { viewModel.navigate(AppScreen.HOME) },
+                    activeScreen = AppScreen.BOARD,
                     onSquareTapped = viewModel::onSquareTapped,
                     onPromotion = viewModel::choosePromotion,
                     onUndo = viewModel::undoMove,
                     onRestart = viewModel::restartGame,
                     onSave = viewModel::saveCurrentGame,
-                    onSettings = { viewModel.navigate(AppScreen.SETTINGS) },
+                    onNavigate = viewModel::navigate,
+                )
+                AppScreen.PROFILE -> PlayerProfileScreen(
+                    uiState = uiState,
+                    contentPadding = padding,
+                    activeScreen = AppScreen.PROFILE,
+                    onSignIn = { viewModel.signInWithGoogle(activity ?: it) },
+                    onSignOut = { viewModel.signOut(activity ?: it) },
+                    onNavigate = viewModel::navigate,
                 )
                 AppScreen.SETTINGS -> SettingsScreen(
                     uiState = uiState,
                     contentPadding = padding,
-                    onBack = { viewModel.navigate(AppScreen.HOME) },
-                    onBoardTheme = viewModel::updateBoardTheme,
-                    onPieceStyle = viewModel::updatePieceStyle,
+                    activeScreen = AppScreen.SETTINGS,
+                    onHolographicTheme = viewModel::updateHolographicThemeEnabled,
+                    onScanlines = viewModel::updateScanlineEffectEnabled,
+                    onPieceGlow = viewModel::updatePieceGlowEnabled,
+                    onAiOverlay = viewModel::updateAiAnalysisOverlayEnabled,
                     onSound = viewModel::updateSoundEnabled,
+                    onHaptic = viewModel::updateHapticFeedbackEnabled,
+                    onTwoFactor = viewModel::updateTwoFactorAuthEnabled,
                     onDifficulty = viewModel::updateAiDifficulty,
                     onResetGame = viewModel::restartGame,
-                    onClearSaved = viewModel::clearSavedGame,
-                    onResetSettings = viewModel::resetSettings,
-                )
-                AppScreen.ABOUT -> AboutScreen(
-                    contentPadding = padding,
-                    onBack = { viewModel.navigate(AppScreen.HOME) },
-                )
-                AppScreen.PREMIUM -> PremiumScreen(
-                    contentPadding = padding,
-                    onBack = { viewModel.navigate(AppScreen.HOME) },
+                    onNavigate = viewModel::navigate,
                 )
             }
         }
@@ -117,16 +125,16 @@ fun ChessMasterApp(viewModel: ChessViewModel) {
     if (showExitDialog) {
         AlertDialog(
             onDismissRequest = { showExitDialog = false },
-            title = { Text("Exit Chess Master Offline?") },
-            text = { Text("Your current game is saved locally. You can resume it from the home screen.") },
+            title = { Text("EXIT VOIDBOARD?") },
+            text = { Text("CURRENT MATCH STATE IS STORED LOCALLY.") },
             confirmButton = {
                 TextButton(onClick = { activity?.finish() }) {
-                    Text("Exit")
+                    Text("EXIT")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showExitDialog = false }) {
-                    Text("Stay")
+                    Text("STAY")
                 }
             },
         )

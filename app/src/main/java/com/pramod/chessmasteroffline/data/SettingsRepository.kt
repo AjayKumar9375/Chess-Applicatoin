@@ -16,7 +16,13 @@ class SettingsRepository(
     private object Keys {
         val boardTheme = stringPreferencesKey("board_theme")
         val pieceStyle = stringPreferencesKey("piece_style")
+        val holographicThemeEnabled = booleanPreferencesKey("holographic_theme_enabled")
+        val scanlineEffectEnabled = booleanPreferencesKey("scanline_effect_enabled")
+        val pieceGlowEnabled = booleanPreferencesKey("piece_glow_enabled")
+        val aiAnalysisOverlayEnabled = booleanPreferencesKey("ai_analysis_overlay_enabled")
         val soundEnabled = booleanPreferencesKey("sound_enabled")
+        val hapticFeedbackEnabled = booleanPreferencesKey("haptic_feedback_enabled")
+        val twoFactorAuthEnabled = booleanPreferencesKey("two_factor_auth_enabled")
         val aiDifficulty = stringPreferencesKey("ai_difficulty")
     }
 
@@ -24,7 +30,13 @@ class SettingsRepository(
         AppSettings(
             boardTheme = preferences[Keys.boardTheme]?.toEnumOrDefault(BoardTheme.CLASSIC) ?: BoardTheme.CLASSIC,
             pieceStyle = preferences[Keys.pieceStyle]?.toEnumOrDefault(PieceStyle.CLASSIC) ?: PieceStyle.CLASSIC,
+            holographicThemeEnabled = preferences[Keys.holographicThemeEnabled] ?: true,
+            scanlineEffectEnabled = preferences[Keys.scanlineEffectEnabled] ?: true,
+            pieceGlowEnabled = preferences[Keys.pieceGlowEnabled] ?: true,
+            aiAnalysisOverlayEnabled = preferences[Keys.aiAnalysisOverlayEnabled] ?: true,
             soundEnabled = preferences[Keys.soundEnabled] ?: true,
+            hapticFeedbackEnabled = preferences[Keys.hapticFeedbackEnabled] ?: true,
+            twoFactorAuthEnabled = preferences[Keys.twoFactorAuthEnabled] ?: false,
             aiDifficulty = preferences[Keys.aiDifficulty]?.toEnumOrDefault(AiDifficulty.MEDIUM) ?: AiDifficulty.MEDIUM,
         )
     }
@@ -39,6 +51,30 @@ class SettingsRepository(
 
     suspend fun setSoundEnabled(enabled: Boolean) {
         context.appPreferences.edit { it[Keys.soundEnabled] = enabled }
+    }
+
+    suspend fun setHolographicThemeEnabled(enabled: Boolean) {
+        context.appPreferences.edit { it[Keys.holographicThemeEnabled] = enabled }
+    }
+
+    suspend fun setScanlineEffectEnabled(enabled: Boolean) {
+        context.appPreferences.edit { it[Keys.scanlineEffectEnabled] = enabled }
+    }
+
+    suspend fun setPieceGlowEnabled(enabled: Boolean) {
+        context.appPreferences.edit { it[Keys.pieceGlowEnabled] = enabled }
+    }
+
+    suspend fun setAiAnalysisOverlayEnabled(enabled: Boolean) {
+        context.appPreferences.edit { it[Keys.aiAnalysisOverlayEnabled] = enabled }
+    }
+
+    suspend fun setHapticFeedbackEnabled(enabled: Boolean) {
+        context.appPreferences.edit { it[Keys.hapticFeedbackEnabled] = enabled }
+    }
+
+    suspend fun setTwoFactorAuthEnabled(enabled: Boolean) {
+        context.appPreferences.edit { it[Keys.twoFactorAuthEnabled] = enabled }
     }
 
     suspend fun setAiDifficulty(difficulty: AiDifficulty) {

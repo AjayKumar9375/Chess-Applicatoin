@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Chess Master Offline"
+rootProject.name = "VoidBoard"
 include(":app")

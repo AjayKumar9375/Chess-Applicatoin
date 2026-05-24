@@ -1,11 +1,13 @@
 package com.pramod.chessmasteroffline.ui
 
 import android.app.Application
+import android.content.Context
 import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pramod.chessmasteroffline.ai.ChessAi
 import com.pramod.chessmasteroffline.data.AiDifficulty
+import com.pramod.chessmasteroffline.data.AuthRepository
 import com.pramod.chessmasteroffline.data.BoardTheme
 import com.pramod.chessmasteroffline.data.GameMode
 import com.pramod.chessmasteroffline.data.PieceStyle
@@ -29,6 +31,7 @@ import kotlinx.coroutines.withContext
 class ChessViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsRepository = SettingsRepository(application.applicationContext)
     private val savedGameRepository = SavedGameRepository(application.applicationContext)
+    private val authRepository = AuthRepository(application.applicationContext)
     private val ai = ChessAi()
 
     private val _uiState = MutableStateFlow(ChessUiState())
@@ -50,6 +53,17 @@ class ChessViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.update { it.copy(hasSavedGame = hasSaved) }
             }
         }
+        viewModelScope.launch {
+            authRepository.userProfile.collect { profile ->
+                _uiState.update { it.copy(userProfile = profile) }
+            }
+        }
+        viewModelScope.launch {
+            while (true) {
+                delay(1_000)
+                tickMatchClock()
+            }
+        }
     }
 
     fun finishSplash() {
@@ -69,8 +83,51 @@ class ChessViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { settingsRepository.setAiDifficulty(difficulty) }
     }
 
+    fun updateLocalWhiteName(name: String) {
+        _uiState.update { it.copy(localWhiteName = name.take(16)) }
+    }
+
+    fun updateLocalBlackName(name: String) {
+        _uiState.update { it.copy(localBlackName = name.take(16)) }
+    }
+
+    fun updateLocalWhiteIcon(icon: String) {
+        _uiState.update { it.copy(localWhiteIcon = icon) }
+    }
+
+    fun updateLocalBlackIcon(icon: String) {
+        _uiState.update { it.copy(localBlackIcon = icon) }
+    }
+
+    fun updateLocalTimeControl(timeControl: LocalTimeControl) {
+        val startingTime = timeControl.durationMillis ?: 0L
+        _uiState.update {
+            it.copy(
+                localTimeControl = timeControl,
+                whiteClockMillis = startingTime,
+                blackClockMillis = startingTime,
+                clockStarted = false,
+                clockExpiredColor = null,
+            )
+        }
+    }
+
+    fun launchLocalVoidMatch() {
+        val ui = _uiState.value
+        if (ui.localWhiteName.isBlank() || ui.localBlackName.isBlank()) {
+            _uiState.update { it.copy(message = "Enter both player callsigns.") }
+            return
+        }
+        startNewGame(GameMode.LOCAL_PLAYER, ui.settings.aiDifficulty)
+    }
+
     fun startNewGame(mode: GameMode = _uiState.value.newGameMode, difficulty: AiDifficulty = _uiState.value.newGameDifficulty) {
         val state = ChessEngine.initialState()
+        val startingTime = if (mode == GameMode.LOCAL_PLAYER) {
+            _uiState.value.localTimeControl.durationMillis ?: 0L
+        } else {
+            0L
+        }
         _uiState.update {
             it.copy(
                 screen = AppScreen.BOARD,
@@ -82,6 +139,10 @@ class ChessViewModel(application: Application) : AndroidViewModel(application) {
                 newGameMode = mode,
                 newGameDifficulty = difficulty,
                 isAiThinking = false,
+                whiteClockMillis = startingTime,
+                blackClockMillis = startingTime,
+                clockStarted = false,
+                clockExpiredColor = null,
                 message = null,
             )
         }
@@ -110,6 +171,10 @@ class ChessViewModel(application: Application) : AndroidViewModel(application) {
                     legalTargets = emptySet(),
                     pendingPromotion = null,
                     isAiThinking = false,
+                    whiteClockMillis = saved.state.initialClockForCurrentMode(),
+                    blackClockMillis = saved.state.initialClockForCurrentMode(),
+                    clockStarted = saved.state.history.isNotEmpty() && _uiState.value.localTimeControl.durationMillis != null,
+                    clockExpiredColor = null,
                     message = "Game resumed.",
                 )
             }
@@ -120,7 +185,7 @@ class ChessViewModel(application: Application) : AndroidViewModel(application) {
     fun onSquareTapped(square: Square) {
         val ui = _uiState.value
         val state = ui.gameState
-        if (state.isTerminal || ui.isAiThinking || isAiTurn(ui) || ui.pendingPromotion != null) return
+        if (state.isTerminal || ui.isAiThinking || isAiTurn(ui) || ui.pendingPromotion != null || ui.clockExpiredColor != null) return
 
         val selected = ui.selectedSquare
         val tappedPiece = state.board[square]
@@ -180,6 +245,8 @@ class ChessViewModel(application: Application) : AndroidViewModel(application) {
                 legalTargets = emptySet(),
                 pendingPromotion = null,
                 isAiThinking = false,
+                clockStarted = previous.history.isNotEmpty() && it.localTimeControl.durationMillis != null,
+                clockExpiredColor = null,
                 message = "Move undone.",
             )
         }
@@ -217,6 +284,30 @@ class ChessViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { settingsRepository.setSoundEnabled(enabled) }
     }
 
+    fun updateHolographicThemeEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setHolographicThemeEnabled(enabled) }
+    }
+
+    fun updateScanlineEffectEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setScanlineEffectEnabled(enabled) }
+    }
+
+    fun updatePieceGlowEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setPieceGlowEnabled(enabled) }
+    }
+
+    fun updateAiAnalysisOverlayEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setAiAnalysisOverlayEnabled(enabled) }
+    }
+
+    fun updateHapticFeedbackEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setHapticFeedbackEnabled(enabled) }
+    }
+
+    fun updateTwoFactorAuthEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setTwoFactorAuthEnabled(enabled) }
+    }
+
     fun updateAiDifficulty(difficulty: AiDifficulty) {
         setNewGameDifficulty(difficulty)
     }
@@ -230,6 +321,30 @@ class ChessViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissMessage() {
         _uiState.update { it.copy(message = null) }
+    }
+
+    fun signInWithGoogle(activityContext: Context) {
+        if (_uiState.value.isSigningIn) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSigningIn = true, message = null) }
+            val result = authRepository.signInWithGoogle(activityContext)
+            _uiState.update {
+                it.copy(
+                    isSigningIn = false,
+                    message = result.fold(
+                        onSuccess = { profile -> "Signed in as ${profile.email}." },
+                        onFailure = { error -> error.message ?: "Google sign-in failed." },
+                    ),
+                )
+            }
+        }
+    }
+
+    fun signOut(activityContext: Context) {
+        viewModelScope.launch {
+            authRepository.signOut(activityContext)
+            _uiState.update { it.copy(message = "Signed out. Offline mode remains available.") }
+        }
     }
 
     private fun selectSquare(square: Square) {
@@ -256,6 +371,7 @@ class ChessViewModel(application: Application) : AndroidViewModel(application) {
                 legalTargets = emptySet(),
                 pendingPromotion = null,
                 moveSoundTick = it.moveSoundTick + 1,
+                clockStarted = it.clockStarted || it.localTimeControl.durationMillis != null,
                 message = null,
             )
         }
@@ -294,6 +410,7 @@ class ChessViewModel(application: Application) : AndroidViewModel(application) {
                     selectedSquare = null,
                     legalTargets = emptySet(),
                     moveSoundTick = if (aiState != null) it.moveSoundTick + 1 else it.moveSoundTick,
+                    clockStarted = if (aiState != null) it.clockStarted || it.localTimeControl.durationMillis != null else it.clockStarted,
                 )
             }
             if (aiState != null) {
@@ -310,6 +427,52 @@ class ChessViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             savedGameRepository.save(state, mode, difficulty)
         }
+    }
+
+    private fun tickMatchClock() {
+        _uiState.update { ui ->
+            val duration = ui.localTimeControl.durationMillis
+            if (
+                ui.screen != AppScreen.BOARD ||
+                ui.gameMode != GameMode.LOCAL_PLAYER ||
+                duration == null ||
+                !ui.clockStarted ||
+                ui.gameState.isTerminal ||
+                ui.clockExpiredColor != null
+            ) {
+                ui
+            } else {
+                val whiteClock = if (ui.gameState.sideToMove == PieceColor.WHITE) {
+                    (ui.whiteClockMillis - 1_000L).coerceAtLeast(0L)
+                } else {
+                    ui.whiteClockMillis
+                }
+                val blackClock = if (ui.gameState.sideToMove == PieceColor.BLACK) {
+                    (ui.blackClockMillis - 1_000L).coerceAtLeast(0L)
+                } else {
+                    ui.blackClockMillis
+                }
+                val expiredColor = when {
+                    ui.gameState.sideToMove == PieceColor.WHITE && whiteClock == 0L -> PieceColor.WHITE
+                    ui.gameState.sideToMove == PieceColor.BLACK && blackClock == 0L -> PieceColor.BLACK
+                    else -> null
+                }
+                ui.copy(
+                    whiteClockMillis = whiteClock,
+                    blackClockMillis = blackClock,
+                    clockExpiredColor = expiredColor,
+                    message = expiredColor?.let { color -> "${color.clockLabel()} time expired." } ?: ui.message,
+                )
+            }
+        }
+    }
+
+    private fun GameState.initialClockForCurrentMode(): Long {
+        return _uiState.value.localTimeControl.durationMillis ?: 0L
+    }
+
+    private fun PieceColor.clockLabel(): String {
+        return if (this == PieceColor.WHITE) "White" else "Black"
     }
 
     private fun AiDifficulty.minimumThinkTimeMillis(): Long {

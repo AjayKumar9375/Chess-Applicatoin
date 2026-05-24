@@ -1,64 +1,66 @@
 package com.pramod.chessmasteroffline.ui.components
 
 import android.view.HapticFeedbackConstants
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.pramod.chessmasteroffline.data.BoardTheme
-import com.pramod.chessmasteroffline.data.PieceStyle
 import com.pramod.chessmasteroffline.engine.GameState
 import com.pramod.chessmasteroffline.engine.GameStatus
 import com.pramod.chessmasteroffline.engine.Piece
 import com.pramod.chessmasteroffline.engine.PieceColor
 import com.pramod.chessmasteroffline.engine.PieceType
 import com.pramod.chessmasteroffline.engine.Square
-
-data class BoardPalette(
-    val light: Color,
-    val dark: Color,
-    val selected: Color,
-    val legal: Color,
-    val lastMove: Color,
-    val check: Color,
-)
+import com.pramod.chessmasteroffline.ui.theme.HudBlue
+import com.pramod.chessmasteroffline.ui.theme.HudBorder
+import com.pramod.chessmasteroffline.ui.theme.JetBrainsMono
 
 @Composable
 fun ChessBoard(
     state: GameState,
     selectedSquare: Square?,
     legalTargets: Set<Square>,
-    boardTheme: BoardTheme,
-    pieceStyle: PieceStyle,
+    pieceGlowEnabled: Boolean,
+    hapticFeedbackEnabled: Boolean,
     onSquareTapped: (Square) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val palette = boardPalette(boardTheme)
+    val view = LocalView.current
+    val checkPulse by rememberInfiniteTransition(label = "checkSquarePulse").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1_000),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "checkSquarePulseValue",
+    )
+    val checkPulseColor = lerp(Color(0xFFFF1744), Color(0xFF8B0000), checkPulse)
     val lastMoveSquares = state.lastMove?.let { setOf(it.from, it.to) }.orEmpty()
-    val selectedPiece = selectedSquare?.let { state.board[it] }
     val checkedKingSquare = if (state.status == GameStatus.CHECK || state.status == GameStatus.CHECKMATE) {
         state.board.entries.firstOrNull {
             it.value.type == PieceType.KING && it.value.color == state.sideToMove
@@ -67,28 +69,103 @@ fun ChessBoard(
         null
     }
 
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .border(2.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f), RoundedCornerShape(6.dp)),
-    ) {
-        for (row in 0..7) {
-            Row(modifier = Modifier.weight(1f)) {
+    BoxWithConstraints(modifier = modifier) {
+        val cell = maxWidth / 8
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val cellPx = size.width / 8f
+            for (row in 0..7) {
                 for (col in 0..7) {
                     val square = Square(row, col)
-                    BoardSquare(
-                        square = square,
-                        piece = state.board[square],
-                        palette = palette,
-                        pieceStyle = pieceStyle,
-                        isSelected = selectedSquare == square,
-                        isLegalTarget = square in legalTargets,
-                        isPawnTarget = selectedPiece?.type == PieceType.PAWN && square in legalTargets,
-                        isLastMove = square in lastMoveSquares,
-                        isCheck = checkedKingSquare == square,
-                        onTap = { onSquareTapped(square) },
-                        modifier = Modifier.weight(1f),
+                    val baseColor = if ((row + col) % 2 == 0) {
+                        Color(0xFFF0D9B5)
+                    } else {
+                        Color(0xFFB58863)
+                    }
+                    val topLeft = Offset(col * cellPx, row * cellPx)
+                    drawRect(
+                        color = if (checkedKingSquare == square) checkPulseColor else baseColor,
+                        topLeft = topLeft,
+                        size = Size(cellPx, cellPx),
                     )
+                    if (square in lastMoveSquares && checkedKingSquare != square) {
+                        drawRect(
+                            color = Color(0xFF3B2413).copy(alpha = 0.14f),
+                            topLeft = topLeft,
+                            size = Size(cellPx, cellPx),
+                        )
+                    }
+                    if (selectedSquare == square && checkedKingSquare != square) {
+                        drawRect(
+                            color = HudBlue.copy(alpha = 0.16f),
+                            topLeft = topLeft,
+                            size = Size(cellPx, cellPx),
+                        )
+                        drawRect(
+                            color = HudBlue.copy(alpha = 0.92f),
+                            topLeft = topLeft + Offset(2.dp.toPx(), 2.dp.toPx()),
+                            size = Size(cellPx - 4.dp.toPx(), cellPx - 4.dp.toPx()),
+                            style = Stroke(width = 2.dp.toPx()),
+                        )
+                    }
+                    if (checkedKingSquare == square) {
+                        drawRect(
+                            color = Color(0xFFFF1744),
+                            topLeft = topLeft + Offset(1.dp.toPx(), 1.dp.toPx()),
+                            size = Size(cellPx - 2.dp.toPx(), cellPx - 2.dp.toPx()),
+                            style = Stroke(width = 2.dp.toPx()),
+                        )
+                    }
+                    drawRect(
+                        color = HudBorder,
+                        topLeft = topLeft,
+                        size = Size(cellPx, cellPx),
+                        style = Stroke(width = 0.6.dp.toPx()),
+                    )
+                    if (square in legalTargets) {
+                        val center = topLeft + Offset(cellPx / 2f, cellPx / 2f)
+                        val targetPiece = state.board[square]
+                        if (targetPiece == null) {
+                            drawCircle(
+                                color = Color(0xFF22140A).copy(alpha = 0.58f),
+                                radius = cellPx * 0.11f,
+                                center = center,
+                            )
+                        } else {
+                            drawCircle(
+                                color = Color(0xFF22140A).copy(alpha = 0.86f),
+                                radius = cellPx * 0.32f,
+                                center = center,
+                                style = Stroke(width = 2.dp.toPx()),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        for (row in 0..7) {
+            for (col in 0..7) {
+                val square = Square(row, col)
+                val piece = state.board[square]
+                Box(
+                    modifier = Modifier
+                        .offset(x = cell * col, y = cell * row)
+                        .size(cell)
+                        .clickable {
+                            if (hapticFeedbackEnabled) {
+                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            }
+                            onSquareTapped(square)
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (piece != null) {
+                        HudPiece(
+                            piece = piece,
+                            glowEnabled = pieceGlowEnabled,
+                            selected = selectedSquare == square,
+                        )
+                    }
                 }
             }
         }
@@ -96,144 +173,58 @@ fun ChessBoard(
 }
 
 @Composable
-private fun BoardSquare(
-    square: Square,
-    piece: Piece?,
-    palette: BoardPalette,
-    pieceStyle: PieceStyle,
-    isSelected: Boolean,
-    isLegalTarget: Boolean,
-    isPawnTarget: Boolean,
-    isLastMove: Boolean,
-    isCheck: Boolean,
-    onTap: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val base = if ((square.row + square.col) % 2 == 0) palette.light else palette.dark
-    val targetColor = when {
-        isCheck -> palette.check
-        isSelected -> palette.selected
-        isLastMove -> palette.lastMove
-        else -> base
-    }
-    val color by animateColorAsState(targetValue = targetColor, label = "squareColor")
-    val scale by animateFloatAsState(targetValue = if (isSelected) 1.08f else 1f, label = "pieceScale")
-    val view = LocalView.current
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(color)
-            .clickable {
-                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                onTap()
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        if (isSelected) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .border(3.dp, palette.selected.copy(alpha = 0.95f)),
-            )
-        }
-
-        if (isLegalTarget) {
-            val dotColor = if (isPawnTarget) Color(0xFFF6C96D) else palette.legal
-            val indicatorModifier = if (piece == null) {
-                Modifier
-                    .size(if (isPawnTarget) 20.dp else 15.dp)
-                    .clip(CircleShape)
-                    .background(dotColor.copy(alpha = 0.92f))
-            } else {
-                Modifier
-                    .size(if (isPawnTarget) 52.dp else 46.dp)
-                    .clip(CircleShape)
-                    .background(dotColor.copy(alpha = 0.16f))
-                    .border(3.dp, dotColor.copy(alpha = 0.92f), CircleShape)
-            }
-            Box(
-                modifier = indicatorModifier,
-            )
-        }
-
-        if (piece != null) {
-            ChessPiece(piece = piece, style = pieceStyle, modifier = Modifier.scale(scale))
-        }
-    }
-}
-
-@Composable
-private fun ChessPiece(piece: Piece, style: PieceStyle, modifier: Modifier = Modifier) {
-    when (style) {
-        PieceStyle.CLASSIC -> {
+private fun HudPiece(piece: Piece, glowEnabled: Boolean, selected: Boolean) {
+    val pieceColor = if (piece.color == PieceColor.WHITE) PieceGold else PieceBlack
+    val outlineColor = if (piece.color == PieceColor.WHITE) PieceBlack else PieceGold
+    val offsets = listOf(
+        (-1.35f).dp to 0.dp,
+        1.35f.dp to 0.dp,
+        0.dp to (-1.35f).dp,
+        0.dp to 1.35f.dp,
+        (-0.95f).dp to (-0.95f).dp,
+        0.95f.dp to (-0.95f).dp,
+        (-0.95f).dp to 0.95f.dp,
+        0.95f.dp to 0.95f.dp,
+    )
+    Box(contentAlignment = Alignment.Center) {
+        offsets.forEach { (xOffset, yOffset) ->
             Text(
                 text = piece.type.symbolFor(piece.color),
-                modifier = modifier,
-                color = if (piece.color == PieceColor.WHITE) Color(0xFFFFF8E7) else Color(0xFF151918),
+                modifier = Modifier.offset(x = xOffset, y = yOffset),
+                color = outlineColor.copy(alpha = 0.95f),
+                fontFamily = JetBrainsMono,
                 fontSize = 34.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
             )
         }
-        PieceStyle.MINIMAL -> {
-            val background = if (piece.color == PieceColor.WHITE) Color(0xFFFFF8E7) else Color(0xFF18201F)
-            val foreground = if (piece.color == PieceColor.WHITE) Color(0xFF18201F) else Color(0xFFFFF8E7)
-            Surface(
-                modifier = modifier.size(38.dp),
-                shape = CircleShape,
-                color = background,
-                shadowElevation = 1.dp,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = piece.type.notationLetter.ifBlank { "P" },
-                        color = foreground,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                    )
-                }
-            }
-        }
+        Text(
+            text = piece.type.symbolFor(piece.color),
+            color = pieceColor,
+            fontFamily = JetBrainsMono,
+            fontSize = 34.sp,
+            fontWeight = FontWeight.Medium,
+            style = TextStyle(
+                shadow = Shadow(
+                    color = outlineColor.copy(alpha = 0.65f),
+                    offset = Offset(0f, 0f),
+                    blurRadius = 7f,
+                ),
+            ),
+        )
     }
 }
 
-private fun boardPalette(theme: BoardTheme): BoardPalette {
-    return when (theme) {
-        BoardTheme.CLASSIC -> BoardPalette(
-            light = Color(0xFFE9D6AD),
-            dark = Color(0xFF8B5E3C),
-            selected = Color(0xFFF6C96D),
-            legal = Color(0xFF126B5B),
-            lastMove = Color(0xFFC9DB75),
-            check = Color(0xFFE85D55),
-        )
-        BoardTheme.OCEAN -> BoardPalette(
-            light = Color(0xFFDCE8E6),
-            dark = Color(0xFF2E6D73),
-            selected = Color(0xFFF2C14E),
-            legal = Color(0xFF1B998B),
-            lastMove = Color(0xFFA7D8DE),
-            check = Color(0xFFE85D75),
-        )
-        BoardTheme.SLATE -> BoardPalette(
-            light = Color(0xFFCFD7D2),
-            dark = Color(0xFF4A5658),
-            selected = Color(0xFFE7B75F),
-            legal = Color(0xFF6CC6B8),
-            lastMove = Color(0xFF9DB57D),
-            check = Color(0xFFE0604C),
-        )
-    }
-}
+private val PieceGold = Color(0xFFFFE082)
+private val PieceBlack = Color(0xFF050505)
 
 fun boardStatusText(state: GameState, isAiThinking: Boolean): String {
-    if (isAiThinking) return "AI is thinking..."
-    val side = if (state.sideToMove == PieceColor.WHITE) "White" else "Black"
+    if (isAiThinking) return "AI SEARCHING..."
+    val side = if (state.sideToMove == PieceColor.WHITE) "GOLD" else "BLACK"
     return when (state.status) {
-        GameStatus.ONGOING -> "$side to move"
-        GameStatus.CHECK -> "$side is in check"
-        GameStatus.CHECKMATE -> "${if (state.sideToMove == PieceColor.WHITE) "Black" else "White"} wins by checkmate"
-        GameStatus.STALEMATE -> "Draw by stalemate"
-        GameStatus.DRAW_INSUFFICIENT_MATERIAL -> "Draw by insufficient material"
+        GameStatus.ONGOING -> "$side TO MOVE"
+        GameStatus.CHECK -> "$side KING IN CHECK"
+        GameStatus.CHECKMATE -> "${if (state.sideToMove == PieceColor.WHITE) "BLACK" else "GOLD"} WINS BY CHECKMATE"
+        GameStatus.STALEMATE -> "DRAW BY STALEMATE"
+        GameStatus.DRAW_INSUFFICIENT_MATERIAL -> "DRAW: INSUFFICIENT MATERIAL"
     }
 }
